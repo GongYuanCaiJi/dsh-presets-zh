@@ -44,4 +44,6 @@ npm run prepare          # shipped 资产完整性（vendor 原档 SHA 对 pinne
 
 ## License
 
-MIT。翻译档基于上游 [deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness)（MIT）内容，上游授权声明保留于 `THIRD_PARTY_NOTICES.md`。
+MIT。翻译档基于上游 [deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness)（MIT）内容；上游版权声明与本移植的并列于 `LICENSE`，出处与逐一对照见 `THIRD_PARTY_NOTICES.md`。
+
+授权 / 合规询问 License & compliance enquiries → [GitHub issues](https://github.com/GongYuanCaiJi/dsh-presets-zh/issues)。
