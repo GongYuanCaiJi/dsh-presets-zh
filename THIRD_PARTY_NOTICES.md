@@ -104,5 +104,13 @@ npm run prepare
 ## License
 
 This package is MIT-licensed (see `LICENSE`). The translated files are
-derivative of upstream content, also MIT-licensed; the upstream license notice
-is retained above.
+derivative of upstream content, also MIT-licensed.
+
+The upstream notice is carried in `LICENSE` alongside this port's own, verbatim
+as upstream writes it:
+
+```
+Copyright (c) 2026 DeepSeek
+```
+
+Full upstream licence text: https://github.com/deepseek-ai/deepseek-harness/blob/main/LICENSE
