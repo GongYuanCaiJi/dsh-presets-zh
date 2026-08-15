@@ -1,12 +1,13 @@
 # Third-Party Notices
 
 This package is a **translation** of the factory agent-preset system prompts
-shipped by the upstream project. Because a translation is not a verbatim copy,
-the "identical bytes + hash" trust anchor does not apply. Instead, this file
-pins the exact upstream revision and file hashes, and provides a one-to-one
-mapping plus copyable verification commands so anyone can confirm that (a) the
-translation was made from exactly this upstream revision, and (b) no paragraph
-was added or removed.
+shipped by the upstream project. A translation is not a verbatim copy, so the
+"identical bytes" trust anchor does not apply. Instead, the trust anchor is
+the upstream project's own **bilingual-pair** convention: each pair pins the
+git blob hash of **both** sides at the last confirmed-consistent state, so
+anyone can confirm that (a) the translation was made from exactly this
+upstream revision, and (b) what ships is exactly that confirmed translation —
+not merely some file with the same paragraph structure.
 
 ## Upstream
 
@@ -19,10 +20,59 @@ was added or removed.
 | Fetch path | `https://raw.githubusercontent.com/deepseek-ai/deepseek-harness/47f943859bef60e4160492346772ded9b24f765a/apps/cli/config/agent-presets/<id>/agent.cordis.yml` |
 
 The four originals are vendored in this repository under `upstream/agent-presets/`
-for hermetic verification; their SHA-256 below is computed from the pinned
-revision, and the verification command re-fetches from GitHub and re-checks.
+for hermetic verification.
 
-## Original file hashes (SHA-256, from the pinned revision)
+## Trust anchor: bilingual-pair consistency records
+
+Each of the four system-prompt pairs has a consistency record
+`pairs/<id>.i18n.yaml` in this repository, in the shape upstream uses for its
+own pair records (`packages/preset/agent-presets/README.i18n.yaml`, contract
+in `docs/i18n/README.md` — both at the pinned revision). The record holds the
+full git blob hash of each side as of the last confirmed-consistent state;
+both languages carry equal authority.
+
+| Pair | Record | English side (original) | Chinese side (translation) |
+|---|---|---|---|
+| `standard` | `pairs/standard.i18n.yaml` | `upstream/agent-presets/standard/agent.cordis.yml` | `presets/standard/agent.cordis.yml` |
+| `cordis` | `pairs/cordis.i18n.yaml` | `upstream/agent-presets/cordis/agent.cordis.yml` | `presets/cordis/agent.cordis.yml` |
+| `code` | `pairs/code.i18n.yaml` | `upstream/agent-presets/code/agent.cordis.yml` | `presets/code/agent.cordis.yml` |
+| `minimal` | `pairs/minimal.i18n.yaml` | `upstream/agent-presets/minimal/agent.cordis.yml` | `presets/minimal/agent.cordis.yml` |
+
+Blob hashes, not commit hashes: they are content-addressed (`git hash-object`
+semantics), so the record is computable for uncommitted working-tree contents
+and recovers the exact last-confirmed text of either side. The English-side
+blob is the upstream file's blob at the pinned revision — the vendored copy
+is byte-identical to it, and re-vendoring from a different revision breaks
+the record.
+
+The harness's own verifier (`scripts/verify-translation-pairing.ts`) is
+markdown-specific — heading/table/list structure signatures, language
+switchers, `.zh.md` gates — so it cannot consume these YAML system prompts.
+Per the project ruling, this port self-produces the verifier in the same
+shape: `scripts/verify-pairs.mjs`. It enforces, fail-closed (exit non-zero,
+never a warning):
+
+1. **Hash equality** — each side's current git blob hash equals the recorded
+   one. Editing *either* side without re-confirming the pair goes red.
+2. **Structure signature** — the translation keeps the anchor against the
+   original: same line count, same line categories, byte-identical
+   structural lines (row ids, plugin names, config keys, `!!js` expressions),
+   same paragraph count.
+
+The gate runs in `npm test` (via `tests/pairs.test.mjs`), standalone as
+`npm run verify-pairs`, and as part of `npm run prepare` / `prepack` (via
+`scripts/verify-shipped.mjs`). After a confirmed re-translation,
+`npm run verify-pairs -- --write` re-records both hashes — and refuses to
+bless a pair whose structure has drifted.
+
+## Supporting evidence: original file hashes (SHA-256, from the pinned revision)
+
+The SHA-256 table is retained as **supporting evidence**: it lets anyone
+re-fetch the pinned originals and re-check them without git, and it also
+covers the six shipped files that are verbatim copies — the four `preset.yml`
+metadata files and the two `SKILL.md` files — which are not part of a
+translation pair. The primary anchor for the four translated system prompts
+is the pair records above, not this table.
 
 | Original file | SHA-256 |
 |---|---|
@@ -43,7 +93,8 @@ Each original system-prompt file maps to exactly one translated file. The
 translation preserves the original line structure: same line count, same
 comment/prose/structural line positions, byte-identical structural lines
 (row ids, plugin names, config keys, `!!js` expressions), and therefore the
-same number of paragraphs.
+same number of paragraphs. This mapping is supporting evidence for the pair
+records above.
 
 | Original | Translated | Original paragraphs | Translated paragraphs |
 |---|---|---|---|
@@ -78,7 +129,30 @@ scope (system prompt only).
 ## Verification
 
 ```bash
-# 1. Confirm the vendored originals really are the pinned revision
+# Primary anchor — bilingual-pair records (hash equality + structure signature):
+npm test                 # verify-pairs gate (all four pairs) + anchor + plugin logic
+npm run verify-pairs     # the same gate, standalone
+npm run prepare          # shipped-asset integrity: pair records + SHA-256 + structure
+
+# Re-record both blob hashes after a confirmed re-translation:
+npm run verify-pairs -- --write presets/standard/agent.cordis.yml
+
+# Independent re-verification, without the repo's scripts:
+cat pairs/*.i18n.yaml    # the records: git blob hash of each side
+# Every side's current blob must equal its record, e.g. for `standard`:
+git hash-object upstream/agent-presets/standard/agent.cordis.yml  # == agent.cordis.yml
+git hash-object presets/standard/agent.cordis.yml                 # == agent.cordis.zh.yml
+# Repeat the two hash-object lines for cordis / code / minimal.
+
+# Side-channel: re-fetch the originals from the pinned commit and compare
+# each printed blob hash to its record's agent.cordis.yml line:
+for id in standard cordis code minimal; do
+  curl -fsSL "https://raw.githubusercontent.com/deepseek-ai/deepseek-harness/47f943859bef60e4160492346772ded9b24f765a/apps/cli/config/agent-presets/$id/agent.cordis.yml" \
+    | git hash-object --stdin
+  git hash-object "upstream/agent-presets/$id/agent.cordis.yml"
+done
+
+# Supporting evidence — vendored originals still match the pinned SHA-256:
 shasum -a 256 upstream/agent-presets/*/agent.cordis.yml \
   | cut -d' ' -f1 | sort > /tmp/actual.txt
 printf '%s\n' \
@@ -87,18 +161,10 @@ printf '%s\n' \
   749da0d93d3824bc4a227b6ead38c99b4247e63108e48bd5fc661b463da00077 \
   cacb47f09a88985c8eb0906a62e6883205727a3c8db901807cb03f936b863cca \
   | sort | diff - /tmp/actual.txt
-
-# 2. Re-fetch the originals from the pinned commit and re-check the hashes
 for id in standard cordis code minimal; do
   curl -fsSL "https://raw.githubusercontent.com/deepseek-ai/deepseek-harness/47f943859bef60e4160492346772ded9b24f765a/apps/cli/config/agent-presets/$id/agent.cordis.yml" \
     | shasum -a 256
 done
-
-# 3. Structural anchor: same lines, same paragraphs, byte-identical structure
-npm test -- tests/anchor.test.mjs
-
-# 4. Full package check (same anchors + shipped-asset integrity)
-npm run prepare
 ```
 
 ## License
@@ -114,3 +180,9 @@ Copyright (c) 2026 DeepSeek
 ```
 
 Full upstream licence text: https://github.com/deepseek-ai/deepseek-harness/blob/main/LICENSE
+
+Auditor note: the sibling npm package `@deepseek-ai/dsh-agent-presets` carried
+`BSD-3-Clause` in its registry `license` field through rc.5 (MIT from rc.6
+onward). This port pins the GitHub repository paths above (MIT), so the
+licensing chain is unaffected; the difference is recorded here to prevent
+misreading.

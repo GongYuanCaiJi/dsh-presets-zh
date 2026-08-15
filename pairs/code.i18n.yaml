@@ -1,0 +1,17 @@
+# Bilingual-pair consistency record for the `code` preset (dsh-presets-zh).
+# The full git blob hash of each side as of the last confirmed-consistent
+# state; both languages carry equal authority (upstream deepseek-harness
+# convention, docs/i18n/README.md). Editing either side without re-confirming
+# fails the gate closed (`npm run verify-pairs`, also run by npm test and
+# prepare). Blob hashes, not commit hashes: content-addressed, so the record
+# recovers the exact last-confirmed text of either side.
+#   agent.cordis.yml    = upstream original at pinned commit
+#                         47f943859bef60e4160492346772ded9b24f765a
+#                         (vendored at upstream/agent-presets/code/agent.cordis.yml,
+#                          byte-identical to the file at that commit)
+#   agent.cordis.zh.yml = this port's translation
+#                         (presets/code/agent.cordis.yml)
+# Re-record after a confirmed re-translation:
+#   npm run verify-pairs -- --write presets/code/agent.cordis.yml
+agent.cordis.yml: fb21c211856320707eb0455835162da77d8895e9
+agent.cordis.zh.yml: 6bd9e40a36bab11bfaf18d145dfd7c1a1e39795e

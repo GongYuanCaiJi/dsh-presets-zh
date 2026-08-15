@@ -2,11 +2,14 @@
 /**
  * Shipped-asset integrity check, run by `prepare` / `prepack` and by CI.
  *
- * Verifies every shipped Chinese preset satisfies the translation anchor
- * against its vendored upstream original, and that the vendored originals
- * match the SHA-256 pinned in THIRD_PARTY_NOTICES.md. Exits non-zero on any
- * violation, so an install (github: prepare) or a publish (prepack) of a
- * broken package fails loud.
+ * Primary anchor: every shipped Chinese preset is consistent with its
+ * bilingual-pair consistency record (`pairs/<id>.i18n.yaml`, the upstream
+ * deepseek-harness convention) — the git blob hash of each side must equal
+ * the recorded one, and the translation must keep the anchor against its
+ * vendored original (structure signature). Supporting evidence: the vendored
+ * originals still match the SHA-256 table in THIRD_PARTY_NOTICES.md, and the
+ * shipped preset files exist. Exits non-zero on any violation, so an install
+ * (github: prepare) or a publish (prepack) of a broken package fails loud.
  */
 
 import { createHash } from 'node:crypto'
@@ -14,6 +17,7 @@ import { readFile, readdir } from 'node:fs/promises'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { anchorCheck, PRESET_IDS } from './anchor.mjs'
+import { verifyPresets } from './verify-pairs.mjs'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 
@@ -30,6 +34,14 @@ function sha256(text) {
 }
 
 const failures = []
+
+// Primary anchor: bilingual-pair records (hash equality both sides + structure
+// signature). A translation edit without re-recording fails here.
+const pairViolations = await verifyPresets()
+for (const violation of pairViolations) {
+  failures.push(`pair record: ${violation}`)
+}
+
 for (const id of PRESET_IDS) {
   const original = await readFile(join(ROOT, 'upstream', 'agent-presets', id, 'agent.cordis.yml'), 'utf8')
   const translated = await readFile(join(ROOT, 'presets', id, 'agent.cordis.yml'), 'utf8')
@@ -54,4 +66,6 @@ if (failures.length > 0) {
   for (const failure of failures) process.stderr.write(`dsh-presets-zh: ${failure}\n`)
   process.exit(1)
 }
-process.stdout.write(`dsh-presets-zh: ${PRESET_IDS.length} presets verified against the pinned upstream revision.\n`)
+process.stdout.write(
+  `dsh-presets-zh: ${PRESET_IDS.length} presets consistent with their bilingual-pair records (git blob hashes) and the pinned upstream revision.\n`,
+)

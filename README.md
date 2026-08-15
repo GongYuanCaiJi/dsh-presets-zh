@@ -6,7 +6,7 @@
 
 ## 功能 Features
 
-- **四个中文预设**：`standard-zh` / `cordis-zh` / `code-zh` / `minimal-zh`，对应英文出厂版逐字对译（段落数相等、结构行逐字保留，见 `THIRD_PARTY_NOTICES.md` 的验证锚）。
+- **四个中文预设**：`standard-zh` / `cordis-zh` / `code-zh` / `minimal-zh`，对应英文出厂版逐字对译（双语对一致性记录双侧钉住 git blob hash，见 `THIRD_PARTY_NOTICES.md` 的信任锚）。
 - **按 locale 载入**：插件读取宿主 locale 设定（`settings.locale.preference`，其自身 fallback 就是 `zh`），把中文预设挂进使用者预设根目录 `$DSH_HOME/.agent-presets/`，并在中文 locale 下把预设指到 `standard-zh`。切回英文自动还原。
 - **不覆写使用者创作**：中文预设只在使用者没改过、且套件升级时重写；编辑过的一律不动（照宿主规则“复制成新预设再改”）。
 - **skill 内容原文保留**：`cordis-zh` 随附的两个组合创作 skill（`editing-cordis-compositions`、`cordis-plugin-development`）为英文原文——skill 内容不在本票范围。
@@ -31,11 +31,12 @@ dsh plugin --profile web add github:GongYuanCaiJi/dsh-presets-zh
 ## 验证 Verification
 
 ```bash
-npm test                 # 翻译锚（行数/段落数/结构行）+ 插件逻辑
-npm run prepare          # shipped 资产完整性（vendor 原档 SHA 对 pinned + 翻译锚）
+npm test                 # 双语对记录闸（双侧 blob hash 钉住 + 结构签名）+ 翻译锚 + 插件逻辑
+npm run verify-pairs     # 同一道双语对闸，单独跑
+npm run prepare          # shipped 资产完整性（pair records + vendor 原档 SHA 对 pinned + 翻译锚）
 ```
 
-翻译出处与逐字 SHA-256、一对一对照表、可复制的验证指令见 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)。
+翻译出处、双语对一致性记录（`pairs/*.i18n.yaml`，双侧 git blob hash，照上游 deepseek-harness 的 bilingual-pair 惯例）、一对一对照表与可复制的验证指令见 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)。
 
 ## 已知限制 Known limitations
 
