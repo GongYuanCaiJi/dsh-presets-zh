@@ -1,0 +1,58 @@
+{
+  "name": "dsh-presets-zh",
+  "version": "0.1.0",
+  "description": "dsh（deepseek-harness）出厂 agent 预设提示词中文版（standard / cordis / code / minimal，按 locale 加载）",
+  "type": "module",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./presets/*": "./presets/*",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "src",
+    "presets",
+    "cordis.patch.yml",
+    "THIRD_PARTY_NOTICES.md",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "node --test 'tests/*.test.mjs'",
+    "prepare": "node scripts/verify-shipped.mjs",
+    "prepack": "npm run prepare"
+  },
+  "keywords": [
+    "dsh",
+    "deepseek-harness",
+    "plugin",
+    "preset",
+    "chinese",
+    "i18n",
+    "zh"
+  ],
+  "license": "MIT",
+  "author": "GongYuanCaiJi",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/GongYuanCaiJi/dsh-presets-zh.git"
+  },
+  "homepage": "https://github.com/GongYuanCaiJi/dsh-presets-zh#readme",
+  "bugs": {
+    "url": "https://github.com/GongYuanCaiJi/dsh-presets-zh/issues"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": ">=4.0.0",
+    "@deepseek-ai/dsh-home-paths": ">=0.1.0-rc.6",
+    "@deepseek-ai/dsh-settings": ">=0.1.0-rc.6"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "devDependencies": {
+    "js-yaml": "^4.3.1"
+  }
+}

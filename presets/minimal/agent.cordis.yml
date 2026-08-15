@@ -1,0 +1,62 @@
+# `minimal` Agent 预设：固定提示词、双工具的编码 Agent 组合。
+#
+# persona 就是完整的系统提示词，因此全局身份、Web 取向、
+# 工具指引以及后续的装配监听器都不能再添加提示词文本。
+# 本预设抑制运行时上下文快照，模型只组合持久化的
+# `bash` 与 `str_replace_editor`。上下文压缩不存在。
+
+- id: persona
+  name: '@deepseek-ai/dsh-persona'
+  config:
+    text: 你是一位乐于助人的软件工程师助手。
+    complete: true
+    includeRuntimeContext: false
+
+# PTY 注册表是 Agent 自有服务，因此它位于条目级
+# realm 中。后端仍消费宿主沙箱策略与子进程实现，
+# 而工具注册进该 Agent 的作用域目录。
+- id: persistent-shell
+  name: cordis:group
+  group: true
+  isolate:
+    terminals: true
+  config:
+    - id: pty
+      name: '@deepseek-ai/dsh-terminal'
+
+    - id: terminal-bash
+      name: '@deepseek-ai/dsh-terminal-bash'
+      config:
+        timeoutMs: 300000
+
+    - id: persistent-bash
+      name: '@deepseek-ai/dsh-tool-bash-persistent'
+      config:
+        timeoutMs: 300000
+        description: |-
+         在 bash shell 中运行命令
+         * 调用此工具时，"command" 参数的内容不需要 XML 转义。
+         * 你无法通过此工具访问互联网。
+         * 你可以通过 apt 与 pip 访问常见 linux 与 python 包的镜像。
+         * 状态在命令调用与用户讨论之间持久保持。
+         * 要检查文件的某一行范围（例如 10-25 行），试试 'sed -n 10,25p /path/to/the/file'。
+         * 请避免产生大量输出的命令。
+         * 请在后台运行长生命周期命令，例如 'sleep 10 &' 或启动一个服务器。
+
+# 裸本地文件系统只为本预设遮蔽宿主的沙箱化 provider。
+# 编辑器共享那个 realm，并要求绝对路径。
+- id: filesystem
+  name: cordis:group
+  group: true
+  isolate:
+    fs: true
+  config:
+    - id: fs-local
+      name: '@deepseek-ai/dsh-fs-local'
+      config:
+        cwd: !!js process.env.DSH_CWD ?? process.cwd()
+
+    - id: str-replace-editor
+      name: '@deepseek-ai/dsh-tool-str-replace-editor'
+      config:
+        maxOutputChars: 16000

@@ -1,0 +1,10 @@
+# dsh-presets-zh bundle patch: mount the locale-driven preset installer.
+#
+# The row mounts our plugin on every profile that installs this bundle. The
+# plugin reads the host locale setting (`settings.locale.preference`, whose
+# own fallback is `zh`), materializes the four Chinese presets into the
+# harness-home user preset root when the locale is Chinese, and selects
+# `standard-zh` as the default preset for sessions that do not name one.
+- insert:
+    - id: presets-zh
+      name: 'dsh-presets-zh'

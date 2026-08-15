@@ -1,0 +1,262 @@
+# `code` Agent 预设：标准编码 Agent，以 Code Mode 呈现。
+#
+# `standard` 里的内容原样保留。新增的是 `tool-presentation`
+# 行：模型不再每个动作调用一次工具，而是针对生成的 SDK
+# 编写 TypeScript 程序，由 `run_code` 执行，因此原本需要五次
+# 往返的序列变成一次。
+#
+# 注册表本身留在宿主平面——Agent 循环的调度器与 API 代理的
+# 呈现器是它的消费者——所以本预设拥有的是该注册表
+# 只属于这个 Agent 的 PRESENTATION（呈现）。原生会话在同一个进程里
+# 与它会话并存，各自看到自己的目录。
+#
+# 本文件是一个 AGENT-PLANE（Agent 平面）组合。它挂载在单个 Agent 的
+# 作用域上下文下，因此它注册的每个工具与提示词段落只属于那个
+# 会话。宿主组合（`base.cordis.yml` + `web.cordis.yml`）
+# 持有预设不得拥有的全部内容：注册表本身、
+# 沙箱与审批栈、持久化，以及模型路由。
+#
+# 这里的服务行必须放在带 `isolate` realm 的分组内。
+# 否则它会发布到根 realm，成为进程级全局，
+# 而非按会话——第二个挂载本预设的会话会与第一个冲突，
+# `dsh-agent-presets` 会在挂载时拒绝。`true` 表示
+# 条目级 realm——每个已挂载会话一个私有实例，这正是
+# 本部署想要的默认值。共享标签则会改为把所有命名它的
+# 会话池化到同一个实例。
+
+# ── 身份 ──────────────────────────────────────────────────────────────────
+
+# 预设自己的 persona（人设），为此 Agent 遮蔽部署默认值。
+# `{{model}}` 与 `{{cwd}}` 从 Agent 自身的路由与工作区解析。
+- id: persona
+  name: '@deepseek-ai/dsh-persona'
+  config:
+    text: >-
+      你是一个由 {{model}} 模型驱动的编码 Agent。你的工作目录是 {{cwd}}。
+
+- id: agent-instructions
+  name: '@deepseek-ai/dsh-agent-instructions'
+  config:
+    maxBytes: 65536
+
+# ── shell ─────────────────────────────────────────────────────────────────
+
+# `shell-env` 留在宿主组合中：`apps/cli/src/web.ts` 注入它来发布
+# `DSH_WEB_URL`/`DSH_WEB_MODE`，而宿主行注入服务正是宿主平面所有权的判据——
+# 注入在任何会话存在之前就解析完成，因此没有 Agent 可以按之键控。
+# 放在预设 realm 后面，这些变量根本到不了模型的 shell。
+# 两个 shell 工具都从这里消费宿主注册表；
+# 它们的执行器（`bash-sandbox`/`pwsh-sandbox`）
+# 也属于宿主平面。
+- id: tool-bash
+  name: '@deepseek-ai/dsh-tool-bash'
+  disabled: !!js process.platform === 'win32'
+
+- id: tool-pwsh
+  name: '@deepseek-ai/dsh-tool-pwsh'
+  disabled: !!js process.platform !== 'win32'
+
+# ── 文件系统 ──────────────────────────────────────────────────────────────
+
+# 两者都注册进宿主 `tools` 注册表且不提供任何服务，因此
+# 不需要 realm。`fs` 服务及其策略留在宿主中。
+- id: tool-fs
+  name: '@deepseek-ai/dsh-tool-fs'
+
+- id: tool-fs-search
+  name: '@deepseek-ai/dsh-tool-fs-search'
+  config:
+    sampleOverCapGlobResults: false
+
+# ── 后台任务 ──────────────────────────────────────────────────────────────
+
+# 只有面向模型的控制。任务注册表留在宿主平面：
+# 它的生产者位于本文件无法放入的任何 realm 之外——上面的 `tool-bash`
+# 用 `ctx.get` 解析它，而这里的条目级 realm 对每个兄弟行都不可见，
+# 于是 `run_in_background` 会回答「后台任务不可用」，
+# 尽管这些控制就躺在目录里。注册表本就按归属 Agent 键控，
+# 所以一个宿主实例即可服务所有会话。
+# 预设选择的是它的 Agent 能否收集并停止后台工作。
+- id: tool-jobs
+  name: '@deepseek-ai/dsh-tool-jobs'
+
+# ── skills（技能）──────────────────────────────────────────────────────────
+
+# skill 注册表位于宿主组合中，并按作用域分层：
+# 这些行注册进本预设在其中的那一层，因此不需要 realm。
+# `skill-filesystem` 为本预设上的 Agent 提供本地根目录发现，
+# `tool-skill` 给它们目录与加载器；合并后的目录还携带
+# 部署全局注册的东西（仓库插件）。
+- id: skill-filesystem
+  name: '@deepseek-ai/dsh-skill-filesystem'
+
+- id: tool-skill
+  name: '@deepseek-ai/dsh-tool-skill'
+
+# ── 目标 ───────────────────────────────────────────────────────────────────
+
+# 只有面向模型的工具。goal 服务、它的会话驱动与 `/goal` 命令
+# 留在宿主平面：Gateway 把 goal 域作为 Remote 端点服务，
+# 接收方来自生成的描述符，因此它在宿主上解析 `goals`，
+# 而这里的条目级 realm 会把它藏起来。
+# 注册表本就按会话键控，所以一个宿主实例即可服务所有会话。
+# 预设选择的是它的 Agent 能否调用 goal 工具。
+- id: tool-goal
+  name: '@deepseek-ai/dsh-tool-goal'
+
+# ── 计划模式 ─────────────────────────────────────────────────────────────
+
+# 计划状态天然按 Agent 归属，因此条目级 realm 在这里不是权宜之计——
+# 它就是正确的生命周期。
+- id: planning
+  name: cordis:group
+  group: true
+  isolate:
+    planMode: true
+  config:
+    - id: plan-mode
+      name: '@deepseek-ai/dsh-plan-mode'
+      config:
+        section: |
+              你现在处于计划模式。在 exit_plan_mode 成功或用户切换会话模式之前，请一直保持计划模式。要求实施更改的命令式语言意味着规划实施方案，而不是执行它。用户的对话性同意——包括对你所提问题的肯定回答——不批准任何东西，也不会结束计划模式；把确认后的决定并入计划，并通过 exit_plan_mode 提交。
+
+              先探索。使用非变异的读取、搜索、静态分析与检查，把计划扎根于真实仓库。不要编辑或写入文件、更改配置、运行会重写已跟踪文件的格式化器或代码生成器、提交，或以其他方式执行计划。优先使用现有函数与模式，而不是新机制。
+
+              为了保证请求缓存稳定，工具目录在各模式间保持一致。这些计划模式规则覆盖任何后续建议使用变异工具的工具描述或指引；那些工具仍然列出，以保持工具目录不变。不要用 todo_write 跟踪这个规划阶段：它在计划获批后跟踪实施，而计划本身属于 exit_plan_mode。
+
+              通过检查解决可发现的事实。只有在用户自有的选择或检查无法回答的重大歧义时才使用 ask_user_question。不要问用户代码在哪里或当前行为如何工作——你能自己查出来。
+
+              让计划决策完备：说明目标与成功标准；按子系统归组实施变更；指出公共 API、schema 与数据流变更；覆盖边界情况、失败模式、测试、验收标准与显式假设。保持简洁到便于评审，又要详细到另一位工程师无需再做设计决策即可实施。
+
+              准备好后，调用 exit_plan_mode 并附上完整的计划 markdown，以 # 标题开头。让 exit_plan_mode 成为该 assistant 回复中唯一且最后的工具调用：它把计划提交审批，实施只在获批后的后续步骤开始。不要把最终计划以普通回复粘贴出来，也不要用文字或 ask_user_question 问「我该继续吗？」。如果评审拒绝了计划，采纳反馈后重新提交。如果评审通道不可用或被中止，请保持计划模式并请用户手动切换模式；不要继续实施。
+
+# ── 压缩 ───────────────────────────────────────────────────────────────────
+
+# `compaction-basic` 通过 `ctx.get` 读取 `toolResultPrune`，因此修剪器必须
+# 与它共享这个 realm，而不能待在 realm 之外。
+#
+# `tokenMeter` 特意不放在这个 realm 里：计量器留在宿主平面上，
+# 这里的行解析的是那一个实例。它不需要配置，
+# 按 Session 键控每次折叠，并拥有浏览器为每个会话读取的
+# 上下文计量投影单位——放在 realm 后面，这些单位会随当时挂载了
+# 哪些预设而出现又消失。
+# 预设选择的是它的 Agent 是否压缩，即下面的 `compaction-basic`。
+- id: compaction
+  name: cordis:group
+  group: true
+  isolate:
+    compaction: true
+    toolResultPruner: true
+  config:
+    - id: compaction-basic
+      name: '@deepseek-ai/dsh-compaction-basic'
+
+    - id: command-compact
+      name: '@deepseek-ai/dsh-command-compact'
+
+    - id: tool-result-pruner
+      name: '@deepseek-ai/dsh-compaction-tool-result-pruner'
+      config:
+        thresholdChars: 8192
+        headChars: 4096
+        tailChars: 1024
+
+# ── 委派与工作流 ──────────────────────────────────────────────────────────
+
+# `subagents` 注册表及其 spawn/fork 后端位于宿主组合中：
+# 注册表是进程单例，其跨会话查询由 api-proxy 提供给浏览器，
+# 且 provider 名只能注册一次。
+# 本预设贡献委派工具（delegation TOOLS），它们解析
+# 那个宿主注册表。
+#
+# `workflows` 则不同——没有 Agent 之外的东西读它——因此每一行到达它时
+# 都共享这里的一个条目级 realm，而留在外面的消费者会解析到
+# 本预设并未填充的宿主注册表。
+- id: delegation
+  name: cordis:group
+  group: true
+  isolate:
+    workflowEngine: true
+  config:
+    - id: tool-subagent-control
+      name: '@deepseek-ai/dsh-tool-subagent-control'
+
+    - id: tool-subagent-list-agents
+      name: '@deepseek-ai/dsh-tool-subagent-control/list-agents'
+
+    - id: tool-subagent
+      name: '@deepseek-ai/dsh-tool-subagent'
+      config:
+        provider: spawn
+        toolName: subagent
+        backgroundMode: continuable
+
+    - id: tool-subagent-fork
+      name: '@deepseek-ai/dsh-tool-subagent'
+      config:
+        provider: fork
+        toolName: subagent_fork
+        backgroundMode: continuable
+
+# 产品级 provider 是宿主平面单例。复制本预设，然后
+# 从任一普通工具行移除 `disabled`，即可让该产品只暴露给
+# 由该副本组合出来的 Agent。
+    - id: tool-subagent-codex
+      name: '@deepseek-ai/dsh-tool-subagent'
+      disabled: true
+      config:
+        provider: codex
+        toolName: subagent_codex
+        enableRunInBackground: false
+        maxDepth: provider-managed
+
+    - id: tool-subagent-claude-code
+      name: '@deepseek-ai/dsh-tool-subagent'
+      disabled: true
+      config:
+        provider: claude-code
+        toolName: subagent_claude_code
+        enableRunInBackground: false
+        maxDepth: provider-managed
+
+    - id: workflow-worker-thread
+      name: '@deepseek-ai/dsh-workflow-worker-thread'
+      config:
+        provider: spawn
+
+    - id: tool-workflow
+      name: '@deepseek-ai/dsh-tool-workflow'
+
+    - id: tool-ralph
+      name: '@deepseek-ai/dsh-tool-ralph'
+      config:
+        subagentProvider: spawn
+        maxRounds: 64
+
+# ── 其余模型侧行 ─────────────────────────────────────────────────────────
+
+- id: tool-ask-user
+  name: '@deepseek-ai/dsh-tool-ask-user'
+
+- id: tool-todo
+  name: '@deepseek-ai/dsh-tool-todo'
+  config:
+    allowParallelInProgress: true
+
+# `web` 服务及其搜索 provider 留在宿主组合中；
+# 只有面向模型的工具是按会话的。
+- id: tool-web
+  name: '@deepseek-ai/dsh-tool-web'
+  config:
+    fetch: false
+    searchTimeoutMs: 60000
+
+# ── 呈现 ────────────────────────────────────────────────────────────────────
+
+# 只属于这个 Agent 的 Code Mode。该行等待宿主的 `codeRuntime`
+# 而不是假设它存在：不组合 TypeScript 运行时的部署会在挂载时
+# 让本预设失败，并指名这个 id，而不是等到第一次请求才失败。
+- id: tool-presentation
+  name: '@deepseek-ai/dsh-agent-tool-presentation'
+  config:
+    mode: code
